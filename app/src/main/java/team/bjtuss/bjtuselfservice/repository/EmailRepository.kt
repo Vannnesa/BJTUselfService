@@ -194,6 +194,26 @@ object EmailRepository {
             }
         }
 
+    /**
+     * Coremail marks a message read as part of mbox:readMessage. Keep an
+     * explicit call as well so clients can retry without reopening the mail.
+     */
+    suspend fun markRead(mid: String) = withContext(Dispatchers.IO) {
+        val sid = openSession()
+        val url = "$MAIL_HOST/coremail/s".toHttpUrl().newBuilder()
+            .addQueryParameter("sid", sid)
+            .addQueryParameter("func", "mbox:setMessageRead")
+            .addQueryParameter("mbox", "1")
+            .addQueryParameter("mid", mid)
+            .addQueryParameter("read", "1")
+            .build()
+        val root = Jsoup.parse(execute(url), "", Parser.xmlParser())
+        val code = root.selectFirst("result > code")?.text()
+        if (code != "S_OK") {
+            throw IllegalStateException("Coremail mark read failed: $code")
+        }
+    }
+
     private fun openSession(): String {
         val moduleResponse = client.newCall(
             Request.Builder().url(MIS_MAIL_MODULE).header("Host", "mis.bjtu.edu.cn").build()

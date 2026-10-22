@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import team.bjtuss.bjtuselfservice.repository.EmailReadState
 import team.bjtuss.bjtuselfservice.repository.EmailRepository
 import team.bjtuss.bjtuselfservice.repository.EmailSummary
 
@@ -20,6 +21,18 @@ class EmailViewModel : ViewModel() {
     val state: StateFlow<EmailUiState> = _state.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            EmailReadState.readIds.collect { readIds ->
+                val current = _state.value
+                if (current is EmailUiState.Success && readIds.isNotEmpty()) {
+                    _state.value = EmailUiState.Success(
+                        current.emails.map { email ->
+                            if (email.id in readIds) email.copy(unread = false) else email
+                        }
+                    )
+                }
+            }
+        }
         refresh()
     }
 

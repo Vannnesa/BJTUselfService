@@ -60,6 +60,7 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.launch
 import team.bjtuss.bjtuselfservice.repository.DataStoreRepository
 import team.bjtuss.bjtuselfservice.repository.EmailDetail
+import team.bjtuss.bjtuselfservice.repository.EmailReadState
 import team.bjtuss.bjtuselfservice.repository.EmailRepository
 import team.bjtuss.bjtuselfservice.ui.theme.AppTheme
 import team.bjtuss.bjtuselfservice.utils.HtmlEmailRenderer
@@ -211,7 +212,13 @@ private fun EmailDetailScreen(
         state = DetailState.Loading
         state = runCatching { EmailRepository.loadMessage(mid) }
             .fold(
-                onSuccess = { DetailState.Success(it) },
+                onSuccess = { detail ->
+                    EmailReadState.markRead(mid)
+                    scope.launch {
+                        runCatching { EmailRepository.markRead(mid) }
+                    }
+                    DetailState.Success(detail)
+                },
                 onFailure = { DetailState.Error(it.message ?: "邮件读取失败") },
             )
     }
