@@ -4,8 +4,12 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
@@ -200,17 +204,29 @@ object EmailRepository {
      */
     suspend fun markRead(mid: String) = withContext(Dispatchers.IO) {
         val sid = openSession()
-        val url = "$MAIL_HOST/coremail/s".toHttpUrl().newBuilder()
+        val url = "$MAIL_HOST/coremail/s/json".toHttpUrl().newBuilder()
             .addQueryParameter("sid", sid)
-            .addQueryParameter("func", "mbox:setMessageRead")
-            .addQueryParameter("mbox", "1")
-            .addQueryParameter("mid", mid)
-            .addQueryParameter("read", "1")
+            .addQueryParameter("func", "mbox:updateMessageStatus")
             .build()
-        val root = Jsoup.parse(execute(url), "", Parser.xmlParser())
-        val code = root.selectFirst("result > code")?.text()
-        if (code != "S_OK") {
-            throw IllegalStateException("Coremail mark read failed: $code")
+        val body = JSONObject()
+            .put("ids", JSONArray().put(mid))
+            .put("markRead", true)
+            .toString()
+            .toRequestBody("application/json; charset=utf-8".toMediaType())
+        val request = Request.Builder()
+            .url(url)
+            .post(body)
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IllegalStateException("Coremail mark read HTTP " + response.code)
+            }
+            val json = JSONObject(response.body?.string().orEmpty())
+            if (json.optString("code") != "S_OK") {
+                throw IllegalStateException(
+                    "Coremail mark read failed: " + json.optString("code")
+                )
+            }
         }
     }
 
