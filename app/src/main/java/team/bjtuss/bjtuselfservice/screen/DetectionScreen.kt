@@ -36,6 +36,8 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -103,6 +105,8 @@ import java.util.Locale
 
 @Composable
 fun BuildingScreen(navController: NavController) {
+    val scope = rememberCoroutineScope()
+    val favorites by DataStoreRepository.getFavoriteBuildings().collectAsState(emptySet())
     val buildingList = listOf(
         "第十七号教学楼",
         "思源楼",
@@ -116,6 +120,12 @@ fun BuildingScreen(navController: NavController) {
         "东区二教",
         "东区一教"
     )
+    val orderedBuildings = remember(favorites) {
+        buildingList.sortedWith(
+            compareByDescending<String> { it in favorites }
+                .thenBy { buildingList.indexOf(it) }
+        )
+    }
     Scaffold(
         modifier = Modifier.fillMaxSize()
     ) { paddingValues ->
@@ -164,7 +174,7 @@ fun BuildingScreen(navController: NavController) {
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
-                items(buildingList.size) { index ->
+                items(orderedBuildings.size) { index ->
                     ElevatedCard(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -173,7 +183,7 @@ fun BuildingScreen(navController: NavController) {
                             containerColor = MaterialTheme.colorScheme.surface
                         ),
                         onClick = {
-                            navController.navigate("ClassroomDetection" + "/${buildingList[index]}")
+                            navController.navigate("ClassroomDetection" + "/${orderedBuildings[index]}")
                         }
                     ) {
                         Row(
@@ -184,23 +194,48 @@ fun BuildingScreen(navController: NavController) {
                                 modifier = Modifier
                                     .size(42.dp)
                                     .clip(RoundedCornerShape(14.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
-                                    text = buildingAbbreviation(buildingList[index]),
+                                    text = buildingAbbreviation(orderedBuildings[index]),
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                                     fontSize = 13.sp,
                                 )
                             }
                             Spacer(Modifier.width(14.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = buildingList[index],
+                                    text = orderedBuildings[index],
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    scope.launch {
+                                        DataStoreRepository.toggleFavoriteBuilding(orderedBuildings[index])
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (orderedBuildings[index] in favorites) {
+                                        Icons.Default.Star
+                                    } else {
+                                        Icons.Default.StarBorder
+                                    },
+                                    contentDescription = if (orderedBuildings[index] in favorites) {
+                                        "取消收藏"
+                                    } else {
+                                        "收藏教学楼"
+                                    },
+                                    tint = if (orderedBuildings[index] in favorites) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                                 )
                             }
                             Icon(
@@ -798,8 +833,8 @@ private fun buildingAbbreviation(name: String): String = when (name) {
     "思源东楼" -> "SD"
     "逸夫教学楼" -> "YF"
     "机械楼" -> "JX"
-    "东区一教" -> "D1"
-    "东区二教" -> "D2"
+    "东区一教" -> "D01"
+    "东区二教" -> "D02"
     else -> name.take(2)
 }
 
@@ -1073,6 +1108,7 @@ private fun ClassroomReservationDialog(
     val scope = rememberCoroutineScope()
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var selectedSlots by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var remindMinutes by remember { mutableStateOf(10) }
     var error by remember { mutableStateOf<String?>(null) }
     val dates = (0..6).map { LocalDate.now().plusDays(it.toLong()) }
     val dayIndex = selectedDate.dayOfWeek.value - 1
@@ -1139,8 +1175,27 @@ private fun ClassroomReservationDialog(
                         )
                     }
                 }
+                Text("提醒时间", style = MaterialTheme.typography.labelLarge)
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    listOf(0, 5, 10, 15, 30, 60).forEach { minutes ->
+                        FilterChip(
+                            selected = remindMinutes == minutes,
+                            onClick = {
+                                remindMinutes = minutes
+                                error = null
+                            },
+                            label = {
+                                Text(if (minutes == 0) "准时" else "提前" + minutes + "分钟")
+                            },
+                        )
+                    }
+                }
                 Text(
-                    "仅保存在本机，不会同步学校预约系统；开始前 10 分钟通过通知提醒。",
+                    "仅保存在本机，不会同步学校预约系统；" +
+                        if (remindMinutes == 0) "预约开始时提醒。" else "开始前 $remindMinutes 分钟提醒。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1161,6 +1216,7 @@ private fun ClassroomReservationDialog(
                     room = classroomName,
                     date = selectedDate.toString(),
                     slots = selectedSlots.sorted(),
+                    remindMinutes = remindMinutes,
                 )
                 scope.launch {
                     DataStoreRepository.addClassroomReservation(reservation)

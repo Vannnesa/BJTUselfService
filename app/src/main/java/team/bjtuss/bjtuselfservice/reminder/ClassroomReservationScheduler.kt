@@ -62,7 +62,8 @@ object ClassroomReservationScheduler {
         val firstSlot = reservation.slots.minOrNull() ?: return null
         if (firstSlot !in startTimes.indices) return null
         val event = LocalDateTime.of(date, startTimes[firstSlot])
-        val trigger = event.minusMinutes(10)
+        val leadMinutes = reservation.remindMinutes.takeIf { it >= 0 } ?: 10
+        val trigger = event.minusMinutes(leadMinutes.toLong())
         val now = LocalDateTime.now()
         return when {
             trigger.isAfter(now) -> trigger.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()

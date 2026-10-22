@@ -6,5 +6,6 @@ data class ClassroomReservation(
     val room: String,
     val date: String,
     val slots: List<Int>,
+    val remindMinutes: Int = 10,
     val createdAt: Long = System.currentTimeMillis(),
 )

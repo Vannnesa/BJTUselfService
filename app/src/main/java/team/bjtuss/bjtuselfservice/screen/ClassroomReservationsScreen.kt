@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import kotlinx.coroutines.launch
+import team.bjtuss.bjtuselfservice.RouteManager
 import team.bjtuss.bjtuselfservice.reminder.ClassroomReservation
 import team.bjtuss.bjtuselfservice.reminder.ClassroomReservationScheduler
 import team.bjtuss.bjtuselfservice.repository.DataStoreRepository
@@ -81,6 +82,12 @@ fun ClassroomReservationsScreen(navController: NavController) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
                 )
+                Button(
+                    onClick = { navController.navigate(RouteManager.Building) },
+                    modifier = Modifier.padding(top = 16.dp),
+                ) {
+                    Text("现在预约")
+                }
             }
         } else {
             LazyColumn(
@@ -149,6 +156,16 @@ private fun ReservationCard(
                 text = periods,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                text = if (reservation.remindMinutes == 0) {
+                    "提醒：预约开始时"
+                } else {
+                    "提醒：提前 " + reservation.remindMinutes + " 分钟"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
             )
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
