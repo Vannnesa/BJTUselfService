@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,7 +64,19 @@ fun RandomClassroomScreen(
     val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    var result by remember { mutableStateOf<RandomRoom?>(null) }
+    var pickedBuilding by rememberSaveable { mutableStateOf("") }
+    var pickedRoom by rememberSaveable { mutableStateOf("") }
+    var pickedCapacity by rememberSaveable { mutableStateOf(0) }
+    var pickedUsed by rememberSaveable { mutableStateOf(0) }
+    var hasPicked by rememberSaveable { mutableStateOf(false) }
+    val result = if (hasPicked) {
+        RandomRoom(
+            pickedBuilding,
+            ClassroomCapacity(pickedRoom, pickedCapacity, pickedUsed),
+        )
+    } else {
+        null
+    }
 
     suspend fun pick() {
         loading = true
@@ -96,7 +109,12 @@ fun RandomClassroomScreen(
                         )
                     }
                     if (freeRooms.isNotEmpty()) {
-                        result = RandomRoom(building, freeRooms.random(Random.Default))
+                        val picked = freeRooms.random(Random.Default)
+                        pickedBuilding = building
+                        pickedRoom = picked.RoomName
+                        pickedCapacity = picked.Capacity
+                        pickedUsed = picked.Used
+                        hasPicked = true
                         return@runCatching
                     }
                 }
@@ -109,9 +127,13 @@ fun RandomClassroomScreen(
     }
 
     LaunchedEffect(Unit) {
-        classroomViewModel.refreshClassroomMap()
-        delay(1200)
-        pick()
+        if (hasPicked) {
+            loading = false
+        } else {
+            classroomViewModel.refreshClassroomMap()
+            delay(1200)
+            pick()
+        }
     }
 
     Scaffold(
