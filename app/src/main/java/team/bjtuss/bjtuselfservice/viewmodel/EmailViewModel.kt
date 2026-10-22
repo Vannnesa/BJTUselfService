@@ -40,7 +40,14 @@ class EmailViewModel : ViewModel() {
         viewModelScope.launch {
             _state.value = EmailUiState.Loading
             runCatching { EmailRepository.loadInbox() }
-                .onSuccess { _state.value = EmailUiState.Success(it) }
+                .onSuccess { emails ->
+                    val readIds = EmailReadState.readIds.value
+                    _state.value = EmailUiState.Success(
+                        emails.map { email ->
+                            if (email.id in readIds) email.copy(unread = false) else email
+                        }
+                    )
+                }
                 .onFailure {
                     _state.value = EmailUiState.Error(it.message ?: "邮件加载失败")
                 }
