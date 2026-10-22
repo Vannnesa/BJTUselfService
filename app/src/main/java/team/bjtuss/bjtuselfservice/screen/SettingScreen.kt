@@ -933,6 +933,31 @@ fun CheckForUpdateSettingItem() {
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(updateMessage)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                "当前版本更新日志",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.surfaceVariant,
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                    .padding(12.dp)
+                            ) {
+                                LazyColumn {
+                                    item {
+                                        MarkdownText(
+                                            markdown = updateMarkdown.ifBlank { "暂无更新日志" }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
