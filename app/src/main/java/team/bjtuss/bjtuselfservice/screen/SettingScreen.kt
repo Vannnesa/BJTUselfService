@@ -72,6 +72,7 @@ import kotlinx.coroutines.launch
 import team.bjtuss.bjtuselfservice.MainApplication.Companion.appContext
 import team.bjtuss.bjtuselfservice.R
 import team.bjtuss.bjtuselfservice.StudentAccountManager
+import team.bjtuss.bjtuselfservice.component.UpdateDownloadOptions
 import team.bjtuss.bjtuselfservice.database.AppDatabase
 import team.bjtuss.bjtuselfservice.reminder.ReminderScheduler
 import team.bjtuss.bjtuselfservice.repository.DataStoreRepository
@@ -780,10 +781,12 @@ fun CheckForUpdateSettingItem() {
     var updateMessage by remember { mutableStateOf("") }
     var updateMarkdown by remember { mutableStateOf("") }
     var downloadUrl by remember { mutableStateOf<String?>(null) }
+    var showDownloadOptions by remember { mutableStateOf(false) }
 
     SettingItemBase(
         onClick = {
             showDialog = true
+            showDownloadOptions = false
             scope.launch {
                 isChecking = true
                 try {
@@ -842,19 +845,11 @@ fun CheckForUpdateSettingItem() {
         AlertDialog(
             onDismissRequest = { showDialog = false },
             confirmButton = {
-                downloadUrl?.let { url ->
-                    if (versionLatest.isNotEmpty() && (versionName < versionLatest)) {
-                        Button(
-                            onClick = {
-                                showDialog = false
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                appContext.startActivity(intent)
-                            }
-                        ) {
-                            Text("前往下载")
-                        }
+                if (versionLatest.isNotEmpty() && (versionName < versionLatest)) {
+                    Button(
+                        onClick = { showDownloadOptions = !showDownloadOptions }
+                    ) {
+                        Text(if (showDownloadOptions) "收起下载方式" else "选择下载方式")
                     }
                 }
             },
@@ -911,6 +906,12 @@ fun CheckForUpdateSettingItem() {
                                             markdown = updateMarkdown
                                         )
                                     }
+                                }
+                            }
+                            if (showDownloadOptions) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                downloadUrl?.let { url ->
+                                    UpdateDownloadOptions(releaseUrl = url)
                                 }
                             }
                         } else {

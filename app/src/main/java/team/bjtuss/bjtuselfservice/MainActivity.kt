@@ -87,6 +87,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import team.bjtuss.bjtuselfservice.reminder.ClassroomReservationScheduler
+import team.bjtuss.bjtuselfservice.component.UpdateDownloadOptions
 import team.bjtuss.bjtuselfservice.reminder.ReminderScheduler
 import team.bjtuss.bjtuselfservice.reminder.ClassroomSubscriptionWorker
 import team.bjtuss.bjtuselfservice.reminder.StudyStatusService
@@ -284,6 +285,7 @@ fun CheckUpdate() {
     var updateMessage by remember { mutableStateOf("") }
     var downloadUrl by remember { mutableStateOf<String?>(null) }
     var updateMarkdown by remember { mutableStateOf("") }
+    var showDownloadOptions by remember { mutableStateOf(false) }
     var hasChecked by remember { mutableStateOf(false) }
     val updateChannel by DataStoreRepository.getUpdateChannel().collectAsState("")
 
@@ -310,15 +312,9 @@ fun CheckUpdate() {
 
     if (showDialog) {
         AlertDialog(onDismissRequest = { showDialog = false }, confirmButton = {
-            downloadUrl?.let { url ->
-                Button(onClick = {
-                    showDialog = false
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    appContext.startActivity(intent)
-                }) {
-                    Text("前往下载")
+            if (downloadUrl != null) {
+                Button(onClick = { showDownloadOptions = !showDownloadOptions }) {
+                    Text(if (showDownloadOptions) "收起下载方式" else "选择下载方式")
                 }
             }
         }, dismissButton = {
@@ -341,6 +337,11 @@ fun CheckUpdate() {
                         MarkdownText(
                             markdown = updateMarkdown
                         )
+                    }
+                }
+                if (showDownloadOptions) {
+                    downloadUrl?.let { url ->
+                        UpdateDownloadOptions(releaseUrl = url)
                     }
                 }
             }
