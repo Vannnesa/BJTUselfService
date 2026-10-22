@@ -187,11 +187,12 @@ fun BuildingScreen(navController: NavController) {
                                     .background(MaterialTheme.colorScheme.surfaceVariant),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Icon(
-                                    Icons.Default.Apartment,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp),
+                                Text(
+                                    text = buildingAbbreviation(buildingList[index]),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontSize = 13.sp,
                                 )
                             }
                             Spacer(Modifier.width(14.dp))
@@ -785,6 +786,21 @@ fun ClassroomScreen(
             }
         }
     }
+}
+
+private fun buildingAbbreviation(name: String): String = when (name) {
+    "第十七号教学楼" -> "17"
+    "第九教学楼" -> "9"
+    "第八教学楼" -> "8"
+    "第五教学楼" -> "5"
+    "思源楼" -> "SY"
+    "思源西楼" -> "SX"
+    "思源东楼" -> "SD"
+    "逸夫教学楼" -> "YF"
+    "机械楼" -> "JX"
+    "东区一教" -> "D1"
+    "东区二教" -> "D2"
+    else -> name.take(2)
 }
 
 @Composable
