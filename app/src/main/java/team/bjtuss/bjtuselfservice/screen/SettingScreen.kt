@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Quiz
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.AlertDialog
@@ -73,6 +74,8 @@ import team.bjtuss.bjtuselfservice.R
 import team.bjtuss.bjtuselfservice.StudentAccountManager
 import team.bjtuss.bjtuselfservice.database.AppDatabase
 import team.bjtuss.bjtuselfservice.reminder.ReminderScheduler
+import team.bjtuss.bjtuselfservice.repository.DataStoreRepository
+import team.bjtuss.bjtuselfservice.repository.UpdateChannel
 import team.bjtuss.bjtuselfservice.repository.fetchLatestRelease
 import team.bjtuss.bjtuselfservice.statemanager.AppEvent
 import team.bjtuss.bjtuselfservice.statemanager.AppEventManager
@@ -142,6 +145,10 @@ fun SettingScreen(mainViewModel: MainViewModel) {
         }
 
         // App info section
+        item {
+            UpdateChannelSettingItem()
+        }
+
         item {
             CheckForUpdateSettingItem()
         }
@@ -717,7 +724,53 @@ fun LinkSettingItem(
 }
 
 @Composable
+fun UpdateChannelSettingItem() {
+    val updateChannel by DataStoreRepository.getUpdateChannel().collectAsState("vannesa")
+    val selected = UpdateChannel.from(updateChannel)
+    val scope = rememberCoroutineScope()
+
+    SettingItemBase {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(12.dp))
+                Text("更新通道", style = MaterialTheme.typography.titleMedium)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                UpdateChannel.entries.forEach { channel ->
+                    FilterChip(
+                        selected = selected == channel,
+                        onClick = {
+                            scope.launch { DataStoreRepository.setUpdateChannel(channel.key) }
+                        },
+                        label = { Text(channel.label) },
+                    )
+                }
+            }
+            Text(
+                if (selected == UpdateChannel.VANNESA) {
+                    "从 Vannnesa/BJTUselfService 检查更新（默认）"
+                } else {
+                    "从 HFDLYS/BJTUselfService 检查更新"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
 fun CheckForUpdateSettingItem() {
+    val updateChannel by DataStoreRepository.getUpdateChannel().collectAsState("vannesa")
     val versionName =
         appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName.orEmpty()
     var versionLatest by remember { mutableStateOf("") }
@@ -734,7 +787,7 @@ fun CheckForUpdateSettingItem() {
             scope.launch {
                 isChecking = true
                 try {
-                    val release = fetchLatestRelease()
+                    val release = fetchLatestRelease(UpdateChannel.from(updateChannel))
                     release?.let {
                         val instant = Instant.parse(it.publishedAt)
                         val localDateTime = instant.atZone(ZoneId.systemDefault())

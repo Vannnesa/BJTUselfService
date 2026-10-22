@@ -97,6 +97,8 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.launch
 import team.bjtuss.bjtuselfservice.MainApplication.Companion.appContext
 import team.bjtuss.bjtuselfservice.RouteManager.ClassroomDetection
+import team.bjtuss.bjtuselfservice.repository.DataStoreRepository
+import team.bjtuss.bjtuselfservice.repository.UpdateChannel
 import team.bjtuss.bjtuselfservice.repository.fetchLatestRelease
 import team.bjtuss.bjtuselfservice.screen.BuildingScreen
 import team.bjtuss.bjtuselfservice.screen.ClassroomReservationsScreen
@@ -283,11 +285,12 @@ fun CheckUpdate() {
     var downloadUrl by remember { mutableStateOf<String?>(null) }
     var updateMarkdown by remember { mutableStateOf("") }
     var hasChecked by remember { mutableStateOf(false) }
+    val updateChannel by DataStoreRepository.getUpdateChannel().collectAsState("")
 
-    scope.launch {
-        if (hasChecked) return@launch
+    LaunchedEffect(updateChannel) {
+        if (updateChannel.isBlank() || hasChecked) return@LaunchedEffect
         hasChecked = true
-        val release = fetchLatestRelease()
+        val release = fetchLatestRelease(UpdateChannel.from(updateChannel))
         updateMessage = release?.let {
             val instant = Instant.parse(it.publishedAt)
             val localDateTime = instant.atZone(ZoneId.systemDefault())

@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -29,6 +30,8 @@ object DataStoreRepository {
     private val SYNC_EXAMS_KEY = booleanPreferencesKey("auto_sync_exams")
     private val CURRENT_WEEK_KEY = stringPreferencesKey("current_week")
     private val CHECK_UPDATE_KEY = booleanPreferencesKey("check_update")
+    private val UPDATE_CHANNEL_KEY = stringPreferencesKey("update_channel")
+    private val FAVORITE_BUILDINGS_KEY = stringSetPreferencesKey("favorite_buildings")
     private val DYNAMIC_COLOR_KEY = booleanPreferencesKey("dynamic_color")
 
     private val THEME_KEY = stringPreferencesKey("theme")
@@ -226,6 +229,24 @@ object DataStoreRepository {
     suspend fun setCheckUpdateOption(enabled: Boolean) {
         appContext.dataStore.edit { preferences ->
             preferences[CHECK_UPDATE_KEY] = enabled
+        }
+    }
+
+    fun getUpdateChannel(): Flow<String> =
+        appContext.dataStore.data.map { it[UPDATE_CHANNEL_KEY] ?: "vannesa" }
+
+    suspend fun setUpdateChannel(channel: String) {
+        appContext.dataStore.edit { it[UPDATE_CHANNEL_KEY] = channel }
+    }
+
+    fun getFavoriteBuildings(): Flow<Set<String>> =
+        appContext.dataStore.data.map { it[FAVORITE_BUILDINGS_KEY] ?: emptySet() }
+
+    suspend fun toggleFavoriteBuilding(building: String) {
+        appContext.dataStore.edit { preferences ->
+            val current = preferences[FAVORITE_BUILDINGS_KEY] ?: emptySet()
+            preferences[FAVORITE_BUILDINGS_KEY] =
+                if (building in current) current - building else current + building
         }
     }
 

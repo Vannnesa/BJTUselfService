@@ -28,9 +28,11 @@ data class Asset(
     val size: Long
 )
 
-suspend fun fetchLatestRelease(): GitHubRelease? = withContext(Dispatchers.IO) {
+suspend fun fetchLatestRelease(
+    channel: UpdateChannel = UpdateChannel.VANNESA,
+): GitHubRelease? = withContext(Dispatchers.IO) {
     val request = Request.Builder()
-        .url(ApiConstant.GITHUB_LATEST_URL)
+        .url(channel.latestReleaseUrl)
         .build()
     val client = OkHttpClient()
     try {
