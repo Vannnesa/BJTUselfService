@@ -101,6 +101,8 @@ import team.bjtuss.bjtuselfservice.RouteManager.ClassroomDetection
 import team.bjtuss.bjtuselfservice.repository.DataStoreRepository
 import team.bjtuss.bjtuselfservice.repository.UpdateChannel
 import team.bjtuss.bjtuselfservice.repository.fetchLatestRelease
+import team.bjtuss.bjtuselfservice.repository.preferredDownloadUrl
+import team.bjtuss.bjtuselfservice.utils.VersionUtils
 import team.bjtuss.bjtuselfservice.screen.BuildingScreen
 import team.bjtuss.bjtuselfservice.screen.ClassroomReservationsScreen
 import team.bjtuss.bjtuselfservice.screen.RandomClassroomScreen
@@ -306,8 +308,8 @@ fun CheckUpdate() {
         } ?: "检查失败，请稍后再试"
         updateMarkdown = release?.body ?: ""
         versionLatest = release?.tagName ?: ""
-        downloadUrl = release?.htmlUrl
-        if (versionLatest.isNotEmpty() && (versionName < versionLatest)) showDialog = true
+        downloadUrl = release?.preferredDownloadUrl()
+        if (VersionUtils.isUpdateAvailable(versionName, versionLatest)) showDialog = true
     }
 
     if (showDialog) {

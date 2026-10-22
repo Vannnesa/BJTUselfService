@@ -78,6 +78,8 @@ import team.bjtuss.bjtuselfservice.reminder.ReminderScheduler
 import team.bjtuss.bjtuselfservice.repository.DataStoreRepository
 import team.bjtuss.bjtuselfservice.repository.UpdateChannel
 import team.bjtuss.bjtuselfservice.repository.fetchLatestRelease
+import team.bjtuss.bjtuselfservice.repository.preferredDownloadUrl
+import team.bjtuss.bjtuselfservice.utils.VersionUtils
 import team.bjtuss.bjtuselfservice.statemanager.AppEvent
 import team.bjtuss.bjtuselfservice.statemanager.AppEventManager
 import team.bjtuss.bjtuselfservice.statemanager.AuthenticatorManager
@@ -804,7 +806,7 @@ fun CheckForUpdateSettingItem() {
                         }"
                         updateMarkdown = it.body ?: ""
                         versionLatest = it.tagName
-                        downloadUrl = it.htmlUrl
+                        downloadUrl = it.preferredDownloadUrl()
                     } ?: run {
                         updateMessage = "检查失败，请稍后再试"
                     }
@@ -845,7 +847,7 @@ fun CheckForUpdateSettingItem() {
         AlertDialog(
             onDismissRequest = { showDialog = false },
             confirmButton = {
-                if (versionLatest.isNotEmpty() && (versionName < versionLatest)) {
+                if (VersionUtils.isUpdateAvailable(versionName, versionLatest)) {
                     Button(
                         onClick = { showDownloadOptions = !showDownloadOptions }
                     ) {
@@ -855,7 +857,7 @@ fun CheckForUpdateSettingItem() {
             },
             dismissButton = {
                 TextButton(onClick = { showDialog = false }) {
-                    if (versionLatest.isNotEmpty() && (versionName < versionLatest)) {
+                    if (VersionUtils.isUpdateAvailable(versionName, versionLatest)) {
                         Text("人习于枸且非一日")
                     } else Text("关闭")
                 }
@@ -876,7 +878,7 @@ fun CheckForUpdateSettingItem() {
                     }
                 } else {
                     Column {
-                        if (versionLatest.isNotEmpty() && (versionName < versionLatest)) {
+                        if (VersionUtils.isUpdateAvailable(versionName, versionLatest)) {
                             Text(
                                 "发现新版本 $versionLatest",
                                 style = MaterialTheme.typography.titleLarge.copy(

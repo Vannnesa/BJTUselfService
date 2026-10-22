@@ -28,6 +28,21 @@ data class Asset(
     val size: Long
 )
 
+/**
+ * The browser_download_url points directly at the APK asset. Prefer the signed
+ * arm64 release APK, then any non-debug APK, then the release page fallback.
+ */
+fun GitHubRelease.preferredDownloadUrl(): String {
+    val apks = assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
+    val preferred = apks.firstOrNull {
+        !it.name.contains("debug", ignoreCase = true) &&
+            it.name.contains("arm64-v8a", ignoreCase = true)
+    } ?: apks.firstOrNull {
+        !it.name.contains("debug", ignoreCase = true)
+    } ?: apks.firstOrNull()
+    return preferred?.downloadUrl ?: htmlUrl
+}
+
 suspend fun fetchLatestRelease(
     channel: UpdateChannel = UpdateChannel.VANNESA,
 ): GitHubRelease? = withContext(Dispatchers.IO) {
