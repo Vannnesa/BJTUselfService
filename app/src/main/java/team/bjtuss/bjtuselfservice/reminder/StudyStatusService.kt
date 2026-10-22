@@ -1,5 +1,6 @@
 package team.bjtuss.bjtuselfservice.reminder
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -7,8 +8,8 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Bundle
 import android.os.IBinder
-import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import kotlinx.coroutines.CoroutineScope
@@ -55,6 +56,7 @@ class StudyStatusService : Service() {
             title = "学习状态",
             content = "正在读取下一节课和考试安排",
             subText = null,
+            shortCriticalText = "准备中",
         )
         ServiceCompat.startForeground(
             this,
@@ -96,6 +98,7 @@ class StudyStatusService : Service() {
                     title = "学习状态",
                     content = "暂时没有即将到来的课程、考试或作业截止",
                     subText = null,
+                    shortCriticalText = "暂无安排",
                     primaryLabel = "打开应用",
                     primaryRoute = ROUTE_HOME,
                 )
@@ -107,8 +110,9 @@ class StudyStatusService : Service() {
         notify(
             buildNotification(
                 title = first.title,
-                content = countdown + " · " + first.detail,
+                content = if (first.ongoing) first.detail else countdown + " · " + first.detail,
                 subText = second?.let { "接下来：" + it.title + " · " + formatCountdown(it.at) },
+                shortCriticalText = first.shortCriticalText,
                 primaryLabel = first.primaryLabel,
                 primaryRoute = first.primaryRoute,
                 secondaryLabel = first.secondaryLabel ?: "打开应用",
@@ -124,6 +128,26 @@ class StudyStatusService : Service() {
         if (day !in 1..7 || slot !in START_TIMES.indices) return null
         val now = LocalDateTime.now()
         val today = LocalDate.now()
+        if (today.dayOfWeek.value == day) {
+            val start = LocalDateTime.of(today, START_TIMES[slot])
+            val end = LocalDateTime.of(today, END_TIMES[slot])
+            if (!now.isBefore(start) && now.isBefore(end)) {
+                return StudyEvent(
+                    title = course.courseName,
+                    detail = "正在上课 · 距下课 " + formatCountdown(end) + " · " +
+                        START_TIMES[slot].format(TIME_FORMAT) + "-" +
+                        END_TIMES[slot].format(TIME_FORMAT) + " · " +
+                        course.coursePlace + " · " + course.courseTeacher,
+                    at = end,
+                    ongoing = true,
+                    shortCriticalText = END_TIMES[slot].format(TIME_FORMAT) + " 下课",
+                    primaryLabel = "看课表",
+                    primaryRoute = ROUTE_COURSE,
+                    secondaryLabel = if (classroomRoute(course.coursePlace) != null) "去教室" else "打开应用",
+                    secondaryRoute = classroomRoute(course.coursePlace) ?: ROUTE_HOME,
+                )
+            }
+        }
         val maxOffset = 7 - today.dayOfWeek.value
         var best: StudyEvent? = null
         for (offset in 0..maxOffset) {
@@ -142,6 +166,11 @@ class StudyStatusService : Service() {
                     at.toLocalTime().format(TIME_FORMAT) + " · " +
                     course.coursePlace + " · " + course.courseTeacher,
                 at = at,
+                shortCriticalText = if (date == today) {
+                    at.format(TIME_FORMAT) + " 上课"
+                } else {
+                    date.format(DATE_FORMAT) + " 上课"
+                },
                 primaryLabel = "看课表",
                 primaryRoute = ROUTE_COURSE,
                 secondaryLabel = if (classroomRoute(course.coursePlace) != null) "去教室" else "打开应用",
@@ -170,6 +199,7 @@ class StudyStatusService : Service() {
             title = "下一场考试 · " + exam.courseName,
             detail = exam.examTimeAndPlace,
             at = at,
+            shortCriticalText = date.format(DATE_FORMAT) + " 考试",
             primaryLabel = "看考试",
             primaryRoute = ROUTE_EXAM,
         )
@@ -182,6 +212,7 @@ class StudyStatusService : Service() {
             title = "作业截止 · " + homework.courseName,
             detail = homework.title + " · " + at.format(DATETIME_FORMAT),
             at = at,
+            shortCriticalText = at.format(DATE_FORMAT) + " 截止",
             primaryLabel = "看作业",
             primaryRoute = ROUTE_HOMEWORK,
         )
@@ -222,21 +253,23 @@ class StudyStatusService : Service() {
         title: String,
         content: String,
         subText: String?,
+        shortCriticalText: String? = null,
         primaryLabel: String? = null,
         primaryRoute: String? = null,
         secondaryLabel: String? = null,
         secondaryRoute: String? = null,
-    ): android.app.Notification {
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+    ): Notification {
+        val builder = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(content)
             .setSubText(subText)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(content))
-            .setCategory(NotificationCompat.CATEGORY_STATUS)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setStyle(Notification.BigTextStyle().bigText(content))
+            .setCategory(Notification.CATEGORY_STATUS)
+            .setPriority(Notification.PRIORITY_LOW)
             .setOnlyAlertOnce(true)
             .setOngoing(true)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(routeIntent(ROUTE_HOME, 2001))
             .addAction(
                 android.R.drawable.ic_menu_agenda,
@@ -250,7 +283,33 @@ class StudyStatusService : Service() {
                 routeIntent(secondaryRoute ?: ROUTE_HOME, 2102),
             )
         }
+        if (shortCriticalText != null) {
+            applyLiveUpdate(builder, shortCriticalText)
+        }
         return builder.build()
+    }
+
+    /**
+     * Android 16.1/17 Live Updates. The builder methods are called through
+     * reflection so the APK remains buildable on older compile SDKs, while the
+     * extras are also written as a fallback for vendor implementations.
+     */
+    private fun applyLiveUpdate(builder: Notification.Builder, shortText: String) {
+        val extras = Bundle().apply {
+            putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true)
+            putString(EXTRA_SHORT_CRITICAL_TEXT, shortText)
+        }
+        runCatching { builder.setExtras(extras) }
+        runCatching {
+            Notification.Builder::class.java
+                .getMethod("setRequestPromotedOngoing", Boolean::class.javaPrimitiveType)
+                .invoke(builder, true)
+        }
+        runCatching {
+            Notification.Builder::class.java
+                .getMethod("setShortCriticalText", String::class.java)
+                .invoke(builder, shortText)
+        }
     }
 
     private fun routeIntent(route: String, requestCode: Int): PendingIntent {
@@ -305,6 +364,8 @@ class StudyStatusService : Service() {
         val title: String,
         val detail: String,
         val at: LocalDateTime,
+        val ongoing: Boolean = false,
+        val shortCriticalText: String = "",
         val primaryLabel: String = "打开应用",
         val primaryRoute: String = ROUTE_HOME,
         val secondaryLabel: String? = null,
@@ -318,6 +379,8 @@ class StudyStatusService : Service() {
         private const val ROUTE_COURSE = "CourseSchedule"
         private const val ROUTE_EXAM = "Exam"
         private const val ROUTE_HOMEWORK = "HomeWork"
+        private const val EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing"
+        private const val EXTRA_SHORT_CRITICAL_TEXT = "android.shortCriticalText"
         private val CAMPUS_BUILDINGS = listOf(
             "第十七号教学楼",
             "思源楼",
@@ -335,6 +398,11 @@ class StudyStatusService : Service() {
             LocalTime.of(8, 0), LocalTime.of(10, 10), LocalTime.of(12, 10),
             LocalTime.of(14, 10), LocalTime.of(16, 20), LocalTime.of(19, 0),
             LocalTime.of(21, 0),
+        )
+        private val END_TIMES = listOf(
+            LocalTime.of(9, 50), LocalTime.of(12, 0), LocalTime.of(14, 0),
+            LocalTime.of(16, 0), LocalTime.of(18, 10), LocalTime.of(20, 50),
+            LocalTime.of(21, 50),
         )
         private val DATE = Regex("""(\d{4})/(\d{1,2})/(\d{1,2})""")
         private val TIME = Regex("""(\d{1,2}):(\d{2})""")

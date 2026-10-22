@@ -360,7 +360,7 @@ fun ReminderSettingsCard(settingViewModel: team.bjtuss.bjtuselfservice.viewmodel
                 Column {
                     Text("上课与考试提醒", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "通知会以标准安卓通知发出，可由 HyperIsland 转成超级岛",
+                        "Android 16+ 会以实时动态（Live Updates）展示，旧系统使用普通通知",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -719,7 +719,7 @@ fun LinkSettingItem(
 @Composable
 fun CheckForUpdateSettingItem() {
     val versionName =
-        appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
+        appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName.orEmpty()
     var versionLatest by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     var showDialog by remember { mutableStateOf(false) }

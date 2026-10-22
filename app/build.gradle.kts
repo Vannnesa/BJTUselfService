@@ -9,14 +9,14 @@ plugins {
 
 android {
     namespace = "team.bjtuss.bjtuselfservice"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "team.bjtuss.bjtuselfservice"
         minSdk = 28
-        targetSdk = 34
-        versionCode = 25
-        versionName = "v1.16.0"
+        targetSdk = 36
+        versionCode = 26
+        versionName = "v1.17.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

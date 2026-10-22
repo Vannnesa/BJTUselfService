@@ -161,6 +161,12 @@ class MainActivity : ComponentActivity() {
         ) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
         }
+        if (Build.VERSION.SDK_INT >= 36 &&
+            checkSelfPermission("android.permission.POST_PROMOTED_NOTIFICATIONS") !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf("android.permission.POST_PROMOTED_NOTIFICATIONS"), 101)
+        }
         lifecycleScope.launch {
             delay(4000)
             ReminderScheduler.reschedule(applicationContext)
@@ -269,7 +275,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun CheckUpdate() {
     val versionName =
-        appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
+        appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName.orEmpty()
     var versionLatest by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     var showDialog by remember { mutableStateOf(false) }
