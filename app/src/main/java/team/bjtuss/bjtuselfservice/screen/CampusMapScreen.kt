@@ -157,6 +157,7 @@ fun CampusMapScreen(navController: NavController) {
     var selectedCategory by rememberSaveable { mutableStateOf("全部") }
     var selectedName by rememberSaveable { mutableStateOf("") }
     var showNavigationDialog by rememberSaveable { mutableStateOf(false) }
+    var showRoads by rememberSaveable { mutableStateOf(true) }
     var startName by rememberSaveable { mutableStateOf("") }
     var endName by rememberSaveable { mutableStateOf("") }
     var routePoints by remember { mutableStateOf<List<Offset>?>(null) }
@@ -213,6 +214,10 @@ fun CampusMapScreen(navController: NavController) {
                 AssistChip(
                     onClick = { showNavigationDialog = true },
                     label = { Text("路线导航") },
+                )
+                AssistChip(
+                    onClick = { showRoads = !showRoads },
+                    label = { Text(if (showRoads) "隐藏道路" else "显示道路") },
                 )
                 if (startName.isNotBlank() && endName.isNotBlank()) {
                     Text(
@@ -313,6 +318,17 @@ fun CampusMapScreen(navController: NavController) {
                             scale(total, total, pivot = Offset.Zero)
                         }) {
                             drawImage(bitmap)
+                            if (showRoads) {
+                                CampusRoutePlanner.roadSegments().forEach { (a, b) ->
+                                    drawLine(
+                                        color = Color(0xFF1E88E5).copy(alpha = 0.55f),
+                                        start = a,
+                                        end = b,
+                                        strokeWidth = 3f / total,
+                                        cap = StrokeCap.Round,
+                                    )
+                                }
+                            }
                             routePoints?.takeIf { it.size > 1 }?.let { route ->
                                 val routePath = Path().apply {
                                     moveTo(route.first().x, route.first().y)

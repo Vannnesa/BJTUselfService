@@ -44,6 +44,9 @@ object CampusRoutePlanner {
         17 to 18, 18 to 19, 19 to 20, 15 to 19,
     )
 
+    fun roadSegments(): List<Pair<Offset, Offset>> =
+        roadEdges.map { (a, b) -> roadNodes[a] to roadNodes[b] }
+
     fun route(start: Offset, end: Offset): List<Offset> {
         val points = roadNodes.toMutableList()
         val startIndex = points.size
