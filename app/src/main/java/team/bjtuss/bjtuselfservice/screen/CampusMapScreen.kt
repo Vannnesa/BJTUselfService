@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -23,18 +25,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -46,8 +53,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
@@ -146,6 +157,10 @@ fun CampusMapScreen(navController: NavController) {
     var query by rememberSaveable { mutableStateOf("") }
     var selectedCategory by rememberSaveable { mutableStateOf("全部") }
     var selectedName by rememberSaveable { mutableStateOf("") }
+    var showNavigationDialog by rememberSaveable { mutableStateOf(false) }
+    var startName by rememberSaveable { mutableStateOf("") }
+    var endName by rememberSaveable { mutableStateOf("") }
+    var routePoints by remember { mutableStateOf<List<Offset>?>(null) }
     var zoom by rememberSaveable { mutableFloatStateOf(1f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
     var viewport by remember { mutableStateOf(IntSize.Zero) }
@@ -191,6 +206,35 @@ fun CampusMapScreen(navController: NavController) {
                     )
                 }
             }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AssistChip(
+                    onClick = { showNavigationDialog = true },
+                    label = { Text("路线导航") },
+                )
+                if (startName.isNotBlank() && endName.isNotBlank()) {
+                    Text(
+                        text = startName + " → " + endName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (routePoints != null) {
+                    AssistChip(
+                        onClick = {
+                            routePoints = null
+                            startName = ""
+                            endName = ""
+                        },
+                        label = { Text("清除路线") },
+                    )
+                }
+            }
             if (query.isNotBlank() && filtered.isNotEmpty()) {
                 LazyRow(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -214,7 +258,7 @@ fun CampusMapScreen(navController: NavController) {
                 }
             }
 
-            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            Box(modifier = Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
                 if (data == null || bitmap == null) {
                     Text(
                         "地图数据加载失败",
@@ -225,6 +269,7 @@ fun CampusMapScreen(navController: NavController) {
                     Canvas(
                         modifier = Modifier
                             .fillMaxSize()
+                            .clipToBounds()
                             .onSizeChanged { viewport = it }
                             .pointerInput(Unit) {
                                 detectTransformGestures { _, panChange, zoomChange, _ ->
@@ -269,6 +314,38 @@ fun CampusMapScreen(navController: NavController) {
                             scale(total, total, pivot = Offset.Zero)
                         }) {
                             drawImage(bitmap)
+                            routePoints?.takeIf { it.size > 1 }?.let { route ->
+                                val routePath = Path().apply {
+                                    moveTo(route.first().x, route.first().y)
+                                    route.drop(1).forEach { lineTo(it.x, it.y) }
+                                }
+                                drawPath(
+                                    path = routePath,
+                                    color = Color.White,
+                                    style = Stroke(
+                                        width = 8f / total,
+                                        cap = StrokeCap.Round,
+                                    ),
+                                )
+                                drawPath(
+                                    path = routePath,
+                                    color = Color(0xFFE65100),
+                                    style = Stroke(
+                                        width = 4.5f / total,
+                                        cap = StrokeCap.Round,
+                                    ),
+                                )
+                                drawCircle(
+                                    color = Color(0xFF2E7D32),
+                                    radius = 7f / total,
+                                    center = route.first(),
+                                )
+                                drawCircle(
+                                    color = Color(0xFFC62828),
+                                    radius = 7f / total,
+                                    center = route.last(),
+                                )
+                            }
                             data.pois.forEach { poi ->
                                 if (selectedCategory != "全部" && poi.category != selectedCategory) return@forEach
                                 val point = Offset(data.pixelX(poi), data.pixelY(poi))
@@ -321,6 +398,118 @@ fun CampusMapScreen(navController: NavController) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                }
+            }
+        }
+    }
+    if (showNavigationDialog && data != null) {
+        NavigationDialog(
+            pois = data.pois,
+            startName = startName,
+            endName = endName,
+            onDismiss = { showNavigationDialog = false },
+            onClear = {
+                routePoints = null
+                startName = ""
+                endName = ""
+                showNavigationDialog = false
+            },
+            onPlan = { start, end ->
+                val startPoint = Offset(data.pixelX(start), data.pixelY(start))
+                val endPoint = Offset(data.pixelX(end), data.pixelY(end))
+                routePoints = CampusRoutePlanner.route(startPoint, endPoint)
+                startName = start.name
+                endName = end.name
+                selectedName = end.name
+                zoom = 1f
+                pan = Offset.Zero
+                showNavigationDialog = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun NavigationDialog(
+    pois: List<CampusPoi>,
+    startName: String,
+    endName: String,
+    onDismiss: () -> Unit,
+    onClear: () -> Unit,
+    onPlan: (CampusPoi, CampusPoi) -> Unit,
+) {
+    var start by remember { mutableStateOf(pois.firstOrNull { it.name == startName }) }
+    var end by remember { mutableStateOf(pois.firstOrNull { it.name == endName }) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("路线导航") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("起点", style = MaterialTheme.typography.labelLarge)
+                PoiSelector(
+                    label = "选择起点",
+                    selected = start,
+                    pois = pois,
+                    onSelected = { start = it },
+                )
+                Text("终点", style = MaterialTheme.typography.labelLarge)
+                PoiSelector(
+                    label = "选择终点",
+                    selected = end,
+                    pois = pois,
+                    onSelected = { end = it },
+                )
+                Text(
+                    "路线会沿校园主要道路绘制，转弯点为示意位置。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (start != null && end != null) onPlan(start!!, end!!)
+                }
+            ) {
+                Text("规划路线")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onClear) { Text("清除") }
+        },
+    )
+}
+
+@Composable
+private fun PoiSelector(
+    label: String,
+    selected: CampusPoi?,
+    pois: List<CampusPoi>,
+    onSelected: (CampusPoi) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = selected?.name ?: label,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            LazyColumn(modifier = Modifier.heightIn(max = 280.dp)) {
+                items(pois, key = { it.name }) { poi ->
+                    DropdownMenuItem(
+                        text = { Text(poi.name) },
+                        onClick = {
+                            onSelected(poi)
+                            expanded = false
+                        },
+                    )
                 }
             }
         }
