@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -112,6 +113,7 @@ private val spaces = listOf(
     Space("教室人数评估", "空闲教室与实时人数", Icons.Default.Apartment, RouteManager.Building),
     Space("随机自习", "随机挑一间当前空闲教室", Icons.Default.Casino, RouteManager.RandomClassroom),
     Space("教室预约", "查看和取消自习预约", Icons.Default.EventAvailable, RouteManager.ClassroomReservations),
+    Space("校园地图", "北京校区建筑与地点", Icons.Default.Map, RouteManager.CampusMap),
     Space("其他功能", "校历、成绩单等", Icons.Default.Apps, RouteManager.OtherFunction),
 )
 
