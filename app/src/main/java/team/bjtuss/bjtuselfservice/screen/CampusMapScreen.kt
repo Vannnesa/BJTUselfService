@@ -3,6 +3,7 @@ package team.bjtuss.bjtuselfservice.screen
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
@@ -28,8 +29,6 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -440,80 +439,119 @@ private fun NavigationDialog(
 ) {
     var start by remember { mutableStateOf(pois.firstOrNull { it.name == startName }) }
     var end by remember { mutableStateOf(pois.firstOrNull { it.name == endName }) }
+    var pickerTarget by remember { mutableStateOf<PickerTarget?>(null) }
+
+    if (pickerTarget != null) {
+        PoiPickerDialog(
+            title = if (pickerTarget == PickerTarget.START) "选择起点" else "选择终点",
+            pois = pois,
+            onSelect = { poi ->
+                if (pickerTarget == PickerTarget.START) start = poi else end = poi
+                pickerTarget = null
+            },
+            onDismiss = { pickerTarget = null },
+        )
+    } else {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("路线导航") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("起点", style = MaterialTheme.typography.labelLarge)
+                    OutlinedButton(
+                        onClick = { pickerTarget = PickerTarget.START },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = start?.name ?: "选择起点",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Text("终点", style = MaterialTheme.typography.labelLarge)
+                    OutlinedButton(
+                        onClick = { pickerTarget = PickerTarget.END },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = end?.name ?: "选择终点",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Text(
+                        "路线会沿校园主要道路绘制，转弯点为示意位置。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (start != null && end != null) onPlan(start!!, end!!)
+                    }
+                ) {
+                    Text("规划路线")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onClear) { Text("清除") }
+            },
+        )
+    }
+}
+
+private enum class PickerTarget { START, END }
+
+@Composable
+private fun PoiPickerDialog(
+    title: String,
+    pois: List<CampusPoi>,
+    onSelect: (CampusPoi) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    val filtered = pois.filter {
+        query.isBlank() || it.name.contains(query, ignoreCase = true)
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("路线导航") },
+        title = { Text(title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("起点", style = MaterialTheme.typography.labelLarge)
-                PoiSelector(
-                    label = "选择起点",
-                    selected = start,
-                    pois = pois,
-                    onSelected = { start = it },
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    label = { Text("搜索地点") },
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                Text("终点", style = MaterialTheme.typography.labelLarge)
-                PoiSelector(
-                    label = "选择终点",
-                    selected = end,
-                    pois = pois,
-                    onSelected = { end = it },
-                )
-                Text(
-                    "路线会沿校园主要道路绘制，转弯点为示意位置。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
+                    items(filtered, key = { it.name }) { poi ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelect(poi) }
+                                .padding(horizontal = 8.dp, vertical = 12.dp),
+                        ) {
+                            Column {
+                                Text(poi.name, style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    poi.category,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = {
-                    if (start != null && end != null) onPlan(start!!, end!!)
-                }
-            ) {
-                Text("规划路线")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onClear) { Text("清除") }
+            TextButton(onClick = onDismiss) { Text("关闭") }
         },
     )
-}
-
-@Composable
-private fun PoiSelector(
-    label: String,
-    selected: CampusPoi?,
-    pois: List<CampusPoi>,
-    onSelected: (CampusPoi) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = selected?.name ?: label,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            LazyColumn(modifier = Modifier.heightIn(max = 280.dp)) {
-                items(pois, key = { it.name }) { poi ->
-                    DropdownMenuItem(
-                        text = { Text(poi.name) },
-                        onClick = {
-                            onSelected(poi)
-                            expanded = false
-                        },
-                    )
-                }
-            }
-        }
-    }
 }
 
 private fun fitScale(data: CampusMapData, viewport: IntSize): Float {
