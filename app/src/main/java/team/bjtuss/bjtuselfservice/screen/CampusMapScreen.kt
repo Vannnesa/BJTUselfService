@@ -1,6 +1,9 @@
 package team.bjtuss.bjtuselfservice.screen
 
 import android.graphics.BitmapFactory
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -47,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -68,6 +72,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.util.Locale
 import kotlin.math.hypot
@@ -81,6 +87,10 @@ data class CampusPoi(
     val category: String,
     val url: String,
 )
+
+private const val MIN_MAP_ZOOM = 0.62f
+private const val MAX_MAP_ZOOM = 6f
+private const val SEARCH_TARGET_ZOOM = 2.6f
 
 data class CampusMapData(
     val image: String,
@@ -166,6 +176,57 @@ fun CampusMapScreen(navController: NavController) {
     var viewport by remember { mutableStateOf(IntSize.Zero) }
     val currentZoom by rememberUpdatedState(zoom)
     val currentPan by rememberUpdatedState(pan)
+    val cameraScope = rememberCoroutineScope()
+    var cameraJob by remember { mutableStateOf<Job?>(null) }
+
+    fun targetPanFor(poi: CampusPoi, targetZoom: Float): Offset {
+        if (data == null) return Offset.Zero
+        val total = fitScale(data, viewport) * targetZoom
+        return Offset(
+            -((data.pixelX(poi) - data.width / 2f) * total),
+            -((data.pixelY(poi) - data.height / 2f) * total),
+        )
+    }
+
+    fun selectSearchPoi(poi: CampusPoi) {
+        selectedName = poi.name
+        if (data == null || viewport.width == 0) return
+        cameraJob?.cancel()
+        val fromZoom = zoom
+        val fromPan = pan
+        val targetPan = targetPanFor(poi, SEARCH_TARGET_ZOOM)
+        val overviewZoom = minOf(MIN_MAP_ZOOM, fromZoom)
+        val overviewPanTarget = targetPanFor(poi, overviewZoom)
+        val overviewPan = lerpOffset(fromPan, overviewPanTarget, 0.18f)
+        cameraJob = cameraScope.launch {
+            // 1. Pull back and drift slightly toward the destination.
+            animate(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = tween(470, easing = FastOutSlowInEasing),
+            ) { fraction, _ ->
+                zoom = fromZoom + (overviewZoom - fromZoom) * fraction
+                pan = lerpOffset(fromPan, overviewPan, fraction)
+            }
+            // 2. Glide across the campus while zoomed out.
+            animate(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = tween(480, easing = FastOutSlowInEasing),
+            ) { fraction, _ ->
+                pan = lerpOffset(overviewPan, overviewPanTarget, fraction)
+            }
+            // 3. Push in onto the selected POI.
+            animate(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = tween(620, easing = FastOutSlowInEasing),
+            ) { fraction, _ ->
+                zoom = overviewZoom + (SEARCH_TARGET_ZOOM - overviewZoom) * fraction
+                pan = lerpOffset(overviewPanTarget, targetPan, fraction)
+            }
+        }
+    }
 
     val selected = data?.pois?.firstOrNull { it.name == selectedName }
     val filtered = data?.pois.orEmpty().filter { poi ->
@@ -246,16 +307,7 @@ fun CampusMapScreen(navController: NavController) {
                 ) {
                     items(filtered) { poi ->
                         AssistChip(
-                            onClick = {
-                                selectedName = poi.name
-                                if (data != null && viewport.width > 0) {
-                                    val total = fitScale(data, viewport) * zoom
-                                    pan = Offset(
-                                        -((data.pixelX(poi) - data.width / 2f) * total),
-                                        -((data.pixelY(poi) - data.height / 2f) * total),
-                                    )
-                                }
-                            },
+                            onClick = { selectSearchPoi(poi) },
                             label = { Text(poi.name) },
                         )
                     }
@@ -277,7 +329,8 @@ fun CampusMapScreen(navController: NavController) {
                             .onSizeChanged { viewport = it }
                             .pointerInput(Unit) {
                                 detectTransformGestures { _, panChange, zoomChange, _ ->
-                                    zoom = (zoom * zoomChange).coerceIn(1f, 6f)
+                                    cameraJob?.cancel()
+                                    zoom = (zoom * zoomChange).coerceIn(MIN_MAP_ZOOM, MAX_MAP_ZOOM)
                                     pan += panChange
                                 }
                             }
@@ -383,12 +436,12 @@ fun CampusMapScreen(navController: NavController) {
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         IconButton(
-                            onClick = { zoom = (zoom * 1.25f).coerceAtMost(6f) },
+                            onClick = { cameraJob?.cancel(); zoom = (zoom * 1.25f).coerceAtMost(MAX_MAP_ZOOM) },
                             modifier = Modifier
                                 .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp)),
                         ) { Icon(Icons.Default.Add, contentDescription = "放大") }
                         IconButton(
-                            onClick = { zoom = (zoom / 1.25f).coerceAtLeast(1f) },
+                            onClick = { cameraJob?.cancel(); zoom = (zoom / 1.25f).coerceAtLeast(MIN_MAP_ZOOM) },
                             modifier = Modifier
                                 .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp)),
                         ) { Icon(Icons.Default.Remove, contentDescription = "缩小") }
@@ -569,6 +622,12 @@ private fun PoiPickerDialog(
         },
     )
 }
+
+private fun lerpOffset(start: Offset, end: Offset, fraction: Float): Offset =
+    Offset(
+        start.x + (end.x - start.x) * fraction,
+        start.y + (end.y - start.y) * fraction,
+    )
 
 private fun fitScale(data: CampusMapData, viewport: IntSize): Float {
     if (viewport.width <= 0 || viewport.height <= 0) return 1f
