@@ -104,6 +104,7 @@ import team.bjtuss.bjtuselfservice.repository.fetchLatestRelease
 import team.bjtuss.bjtuselfservice.repository.preferredDownloadUrl
 import team.bjtuss.bjtuselfservice.utils.VersionUtils
 import team.bjtuss.bjtuselfservice.screen.BuildingScreen
+import team.bjtuss.bjtuselfservice.screen.CampusMapProScreen
 import team.bjtuss.bjtuselfservice.screen.CampusMapScreen
 import team.bjtuss.bjtuselfservice.screen.ClassroomReservationsScreen
 import team.bjtuss.bjtuselfservice.screen.RandomClassroomScreen
@@ -384,6 +385,9 @@ fun App(mainViewModel: MainViewModel, hasBackground: Boolean = false) {
         composable(RouteManager.CampusMap) {
             CampusMapScreen(navController)
         }
+        composable(RouteManager.CampusMapPro) {
+            CampusMapProScreen(navController)
+        }
         composable(RouteManager.RandomClassroom) {
             RandomClassroomScreen(navController, mainViewModel)
         }
@@ -511,6 +515,7 @@ object RouteManager {
     const val ExamSchedule: String = "Exam"
     const val Building: String = "Building"
     const val CampusMap: String = "CampusMap"
+    const val CampusMapPro: String = "CampusMapPro"
     const val RandomClassroom: String = "RandomClassroom"
     const val ClassroomReservations: String = "ClassroomReservations"
     const val ClassroomDetection: String = "ClassroomDetection/{buildingName}?room={room}"

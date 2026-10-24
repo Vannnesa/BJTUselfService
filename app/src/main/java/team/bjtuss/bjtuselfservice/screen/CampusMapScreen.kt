@@ -82,7 +82,7 @@ data class CampusMapData(
     val pois: List<CampusPoi>,
 )
 
-private fun loadCampusMap(context: android.content.Context): CampusMapData? = runCatching {
+internal fun loadCampusMap(context: android.content.Context): CampusMapData? = runCatching {
     val json = context.assets.open("campus_map/campus_map.json")
         .bufferedReader(Charsets.UTF_8)
         .use { JSONObject(it.readText()) }
@@ -119,7 +119,7 @@ private fun CampusMapData.pixelX(poi: CampusPoi): Float =
 private fun CampusMapData.pixelY(poi: CampusPoi): Float =
     (poi.y - originY) / unitsPerPixel
 
-private fun categoryColor(category: String): Color = when (category) {
+internal fun categoryColor(category: String): Color = when (category) {
     "餐饮" -> Color(0xFFEF6C00)
     "宿舍" -> Color(0xFF6A1B9A)
     "运动" -> Color(0xFF2E7D32)
