@@ -16,6 +16,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -64,6 +65,7 @@ fun RandomClassroomScreen(
     val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var selectedCampus by rememberSaveable { mutableStateOf("主区") }
     var pickedBuilding by rememberSaveable { mutableStateOf("") }
     var pickedRoom by rememberSaveable { mutableStateOf("") }
     var pickedCapacity by rememberSaveable { mutableStateOf(0) }
@@ -97,7 +99,7 @@ fun RandomClassroomScreen(
                     error = "当前没有可用的空闲教室"
                     return@runCatching
                 }
-                val shuffledBuildings = BUILDINGS.shuffled(Random.Default)
+                val shuffledBuildings = buildingsForCampus(selectedCampus).shuffled(Random.Default)
                 for (building in shuffledBuildings.take(4)) {
                     val info = runCatching {
                         getClassroomCapacity(building).get(10, TimeUnit.SECONDS)
@@ -124,6 +126,18 @@ fun RandomClassroomScreen(
             }
         }
         loading = false
+    }
+
+    fun switchCampus(campus: String) {
+        if (selectedCampus == campus) return
+        selectedCampus = campus
+        hasPicked = false
+        pickedBuilding = ""
+        pickedRoom = ""
+        pickedCapacity = 0
+        pickedUsed = 0
+        error = null
+        scope.launch { pick() }
     }
 
     LaunchedEffect(Unit) {
@@ -179,6 +193,31 @@ fun RandomClassroomScreen(
                         )
                     }
                 }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("随机范围", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (selectedCampus == "东区") "只从东区教学楼中抽取" else "只从主区教学楼中抽取",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                FilterChip(
+                    selected = selectedCampus == "主区",
+                    onClick = { switchCampus("主区") },
+                    label = { Text("主区") },
+                )
+                FilterChip(
+                    selected = selectedCampus == "东区",
+                    onClick = { switchCampus("东区") },
+                    label = { Text("东区") },
+                )
             }
 
             when {
@@ -249,7 +288,7 @@ private fun currentSlotLabel(): String {
     return if (index >= 0) "第" + (index + 1) + "节" else "课间"
 }
 
-private val BUILDINGS = listOf(
+private val MAIN_BUILDINGS = listOf(
     "第十七号教学楼",
     "思源楼",
     "思源西楼",
@@ -259,6 +298,12 @@ private val BUILDINGS = listOf(
     "第五教学楼",
     "逸夫教学楼",
     "机械楼",
+)
+
+private val EAST_BUILDINGS = listOf(
     "东区二教",
     "东区一教",
 )
+
+private fun buildingsForCampus(campus: String): List<String> =
+    if (campus == "东区") EAST_BUILDINGS else MAIN_BUILDINGS
