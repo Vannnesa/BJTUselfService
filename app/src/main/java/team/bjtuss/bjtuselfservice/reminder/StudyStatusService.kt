@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -34,12 +35,13 @@ import java.time.temporal.ChronoUnit
 class StudyStatusService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
+    private var lastNotificationKey: String? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startInForeground()
         if (job == null) {
+            startInForeground()
             job = scope.launch {
                 while (isActive) {
                     runCatching { updateNotification() }
@@ -56,7 +58,9 @@ class StudyStatusService : Service() {
             title = "学习状态",
             content = "正在读取下一节课和考试安排",
             subText = null,
-            shortCriticalText = "准备中",
+            shortCriticalText = null,
+            kind = EventKind.NONE,
+            promote = false,
         )
         ServiceCompat.startForeground(
             this,
@@ -72,6 +76,8 @@ class StudyStatusService : Service() {
 
     private suspend fun updateNotification() {
         val currentWeek = DataStoreRepository.getCurrentWeek().first()
+        val courseReminderEnabled = DataStoreRepository.getCourseReminderEnabled().first()
+        val courseLeadMinutes = DataStoreRepository.getCourseReminderLeadMinutes().first()
         val courses = runCatching {
             AppDatabase.getInstance().courseEntityDao()
                 .getCurrentSemesterCourseListBySemester(true)
@@ -93,30 +99,61 @@ class StudyStatusService : Service() {
 
         val first = events.firstOrNull()
         if (first == null) {
+            val key = "none"
+            if (key == lastNotificationKey) return
+            lastNotificationKey = key
             notify(
                 buildNotification(
                     title = "学习状态",
                     content = "暂时没有即将到来的课程、考试或作业截止",
                     subText = null,
-                    shortCriticalText = "暂无安排",
+                    shortCriticalText = null,
                     primaryLabel = "打开应用",
                     primaryRoute = ROUTE_HOME,
+                    kind = EventKind.NONE,
+                    promote = false,
                 )
             )
             return
         }
+
+        val now = LocalDateTime.now()
+        val isCourse = first.kind == EventKind.COURSE
+        val withinLead = isCourse && !first.ongoing && courseReminderEnabled &&
+            !first.at.isBefore(now) &&
+            !first.at.isAfter(now.plusMinutes(courseLeadMinutes.toLong()))
+        val phase = when {
+            isCourse && first.ongoing && courseReminderEnabled -> "ongoing"
+            isCourse && withinLead -> "reminder"
+            isCourse -> "quiet"
+            else -> "event-" + (Duration.between(now, first.at).toMinutes().coerceAtLeast(0) / 10)
+        }
+        val key = first.kind.name + "|" + first.title + "|" + first.at + "|" + phase
+        if (key == lastNotificationKey) return
+        lastNotificationKey = key
+
+        val quietCourse = isCourse && phase == "quiet"
         val second = events.drop(1).firstOrNull()
-        val countdown = formatCountdown(first.at)
+        val content = when {
+            quietCourse -> first.detail
+            first.ongoing -> first.detail
+            else -> formatCountdown(first.at) + " · " + first.detail
+        }
         notify(
             buildNotification(
                 title = first.title,
-                content = if (first.ongoing) first.detail else countdown + " · " + first.detail,
-                subText = second?.let { "接下来：" + it.title + " · " + formatCountdown(it.at) },
-                shortCriticalText = first.shortCriticalText,
+                content = content,
+                subText = second?.let {
+                    if (quietCourse) "接下来：" + it.title
+                    else "接下来：" + it.title + " · " + formatCountdown(it.at)
+                },
+                shortCriticalText = if (quietCourse) null else first.shortCriticalText,
                 primaryLabel = first.primaryLabel,
                 primaryRoute = first.primaryRoute,
                 secondaryLabel = first.secondaryLabel ?: "打开应用",
                 secondaryRoute = first.secondaryRoute ?: ROUTE_HOME,
+                kind = first.kind,
+                promote = !quietCourse,
             )
         )
     }
@@ -145,6 +182,7 @@ class StudyStatusService : Service() {
                     primaryRoute = ROUTE_COURSE,
                     secondaryLabel = if (classroomRoute(course.coursePlace) != null) "去教室" else "打开应用",
                     secondaryRoute = classroomRoute(course.coursePlace) ?: ROUTE_HOME,
+                    kind = EventKind.COURSE,
                 )
             }
         }
@@ -175,6 +213,7 @@ class StudyStatusService : Service() {
                 primaryRoute = ROUTE_COURSE,
                 secondaryLabel = if (classroomRoute(course.coursePlace) != null) "去教室" else "打开应用",
                 secondaryRoute = classroomRoute(course.coursePlace) ?: ROUTE_HOME,
+                kind = EventKind.COURSE,
             )
             if (best == null || event.at.isBefore(best!!.at)) best = event
         }
@@ -202,6 +241,7 @@ class StudyStatusService : Service() {
             shortCriticalText = date.format(DATE_FORMAT) + " 考试",
             primaryLabel = "看考试",
             primaryRoute = ROUTE_EXAM,
+            kind = EventKind.EXAM,
         )
     }
 
@@ -215,6 +255,7 @@ class StudyStatusService : Service() {
             shortCriticalText = at.format(DATE_FORMAT) + " 截止",
             primaryLabel = "看作业",
             primaryRoute = ROUTE_HOMEWORK,
+            kind = EventKind.HOMEWORK,
         )
     }
 
@@ -249,6 +290,26 @@ class StudyStatusService : Service() {
         }
     }
 
+    private fun accentColor(kind: EventKind): Int {
+        val dark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
+        return if (dark) {
+            when (kind) {
+                EventKind.COURSE -> 0xFF80D8FF.toInt()
+                EventKind.EXAM -> 0xFFFFCC80.toInt()
+                EventKind.HOMEWORK -> 0xFFB9F6CA.toInt()
+                EventKind.NONE -> 0xFFCFD8DC.toInt()
+            }
+        } else {
+            when (kind) {
+                EventKind.COURSE -> 0xFF0D47A1.toInt()
+                EventKind.EXAM -> 0xFFB71C1C.toInt()
+                EventKind.HOMEWORK -> 0xFF1B5E20.toInt()
+                EventKind.NONE -> 0xFF37474F.toInt()
+            }
+        }
+    }
+
     private fun buildNotification(
         title: String,
         content: String,
@@ -258,6 +319,8 @@ class StudyStatusService : Service() {
         primaryRoute: String? = null,
         secondaryLabel: String? = null,
         secondaryRoute: String? = null,
+        kind: EventKind = EventKind.NONE,
+        promote: Boolean = true,
     ): Notification {
         val builder = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -270,6 +333,8 @@ class StudyStatusService : Service() {
             .setOnlyAlertOnce(true)
             .setOngoing(true)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setColor(accentColor(kind))
+            .setColorized(false)
             .setContentIntent(routeIntent(ROUTE_HOME, 2001))
             .addAction(
                 android.R.drawable.ic_menu_agenda,
@@ -283,7 +348,7 @@ class StudyStatusService : Service() {
                 routeIntent(secondaryRoute ?: ROUTE_HOME, 2102),
             )
         }
-        if (shortCriticalText != null) {
+        if (shortCriticalText != null && promote) {
             applyLiveUpdate(builder, shortCriticalText)
         }
         return builder.build()
@@ -360,6 +425,8 @@ class StudyStatusService : Service() {
         super.onDestroy()
     }
 
+    private enum class EventKind { COURSE, EXAM, HOMEWORK, NONE }
+
     private data class StudyEvent(
         val title: String,
         val detail: String,
@@ -370,6 +437,7 @@ class StudyStatusService : Service() {
         val primaryRoute: String = ROUTE_HOME,
         val secondaryLabel: String? = null,
         val secondaryRoute: String? = null,
+        val kind: EventKind = EventKind.NONE,
     )
 
     companion object {
