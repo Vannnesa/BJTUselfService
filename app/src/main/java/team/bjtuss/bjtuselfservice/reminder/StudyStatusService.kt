@@ -6,11 +6,15 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.graphics.Color
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import kotlinx.coroutines.CoroutineScope
@@ -310,6 +314,24 @@ class StudyStatusService : Service() {
         }
     }
 
+    private fun notificationTextColor(): Int {
+        val dark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
+        return if (dark) Color.WHITE else Color.BLACK
+    }
+
+    private fun coloredText(text: String?): CharSequence? {
+        if (text.isNullOrEmpty()) return text
+        return SpannableString(text).apply {
+            setSpan(
+                ForegroundColorSpan(notificationTextColor()),
+                0,
+                length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+        }
+    }
+
     private fun buildNotification(
         title: String,
         content: String,
@@ -325,9 +347,9 @@ class StudyStatusService : Service() {
         val builder = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
-            .setContentText(content)
-            .setSubText(subText)
-            .setStyle(Notification.BigTextStyle().bigText(content))
+            .setContentText(coloredText(content))
+            .setSubText(coloredText(subText))
+            .setStyle(Notification.BigTextStyle().bigText(coloredText(content)))
             .setCategory(Notification.CATEGORY_STATUS)
             .setPriority(Notification.PRIORITY_LOW)
             .setOnlyAlertOnce(true)
