@@ -66,6 +66,8 @@ jobs:
           echo "Prepared tag: ${TAG} (prerelease=${PRERELEASE})"
 
       - name: Build release and debug
+        env:
+          BJTUFREEC_APP_TOKEN: ${{ secrets.BJTUFREEC_APP_TOKEN }}
         run: ./gradlew :app:assembleRelease :app:assembleDebug --stacktrace
 
       - name: Prepare unsigned release APK

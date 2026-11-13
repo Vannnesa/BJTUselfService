@@ -44,6 +44,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -62,6 +63,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -316,6 +318,8 @@ fun ClassroomScreen(
     val classroomViewModel = mainViewModel.classroomViewModel
     val classroomMap by classroomViewModel.classroomMap.collectAsState()
     val buildingInfo = remember { mutableStateOf<ClassroomCapacityService.BuildingInfo?>(null) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var loadAttempt by remember { mutableIntStateOf(0) }
     var filterExpanded by remember { mutableStateOf(false) }
     var selectedFilter by remember { mutableStateOf("教室名") }
     var sortOrder by remember { mutableStateOf(false) }
@@ -344,10 +348,15 @@ fun ClassroomScreen(
     val showDialog = remember { mutableStateOf(false) }
     val selectedClassroom = remember { mutableStateOf<String>("") }
     // 异步获取教室容量信息
-    LaunchedEffect(buildingName) {
-        getClassroomCapacity(buildingName).thenAccept {
-            buildingInfo.value = it
-        }
+    LaunchedEffect(buildingName, loadAttempt) {
+        loadError = null
+        getClassroomCapacity(buildingName)
+            .thenAccept { buildingInfo.value = it }
+            .exceptionally { error ->
+                buildingInfo.value = null
+                loadError = error.cause?.message ?: error.message ?: "教室数据加载失败"
+                null
+            }
     }
     LaunchedEffect(buildingInfo.value, initialRoom) {
         val info = buildingInfo.value ?: return@LaunchedEffect
@@ -392,6 +401,44 @@ fun ClassroomScreen(
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp)
         ) {
+            if (buildingInfo.value == null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            buildingName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        if (loadError == null) {
+                            CircularProgressIndicator()
+                            Text(
+                                "正在加载教室数据…",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            Text(
+                                "教室数据加载失败",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                            Text(
+                                loadError ?: "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Button(onClick = { loadAttempt++ }) { Text("重试") }
+                        }
+                    }
+                }
+            }
             // 显示标题和基础信息
             buildingInfo.value?.let { info ->
                 ElevatedCard(

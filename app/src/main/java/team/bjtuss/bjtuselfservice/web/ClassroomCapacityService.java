@@ -1,59 +1,100 @@
 package team.bjtuss.bjtuselfservice.web;
 
-
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import team.bjtuss.bjtuselfservice.constant.ApiConstant;
+import okhttp3.Response;
+import team.bjtuss.bjtuselfservice.BuildConfig;
 
+/**
+ * Reads the current classroom service (the same HTTPS service used by the
+ * upstream app). The old yaya.csoci.com HTTP endpoint is no longer reachable.
+ */
 public class ClassroomCapacityService {
-    public static boolean ok = false;
-    public static CompletableFuture<BuildingInfo> getClassroomCapacity(String BuildingName) {
-        CompletableFuture<BuildingInfo> future = new CompletableFuture<>();
-        OkHttpClient client = new OkHttpClient();
-        Request request = new Request.Builder()
-                .url(ApiConstant.CLASSROOM_CAPACITY_URL + BuildingName)
-                .build();
-        client.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override
-            public void onResponse(okhttp3.Call call, okhttp3.Response response) {
-                if (response.isSuccessful()) {
-                    try {
-                        String responseBody = response.body().string();
-                        JSONObject jsonObject = new JSONObject(responseBody);
-                        List<ClassroomCapacity> classroomList = new ArrayList<>();
-                        JSONArray timeArray = jsonObject.getJSONArray("time");
-                        String effectiveDateStart = timeArray.getString(0);
-                        String effectiveDateEnd = timeArray.getString(1);
-                        JSONArray dataArray = jsonObject.getJSONArray("data");
-                        for (int i = 0; i < dataArray.length(); i++) {
-                            JSONArray classroom = dataArray.getJSONArray(i);
-                            String roomName = classroom.getString(0);
-                            int capacity = classroom.getInt(3);
-                            int used = classroom.getInt(2);
-                            classroomList.add(new ClassroomCapacity(roomName, capacity, used));
-                        }
-                        future.complete(new BuildingInfo(BuildingName, classroomList, effectiveDateStart, effectiveDateEnd));
-                    } catch (Exception e) {
-                        future.completeExceptionally(e);
-                    }
-                } else {
-                    future.completeExceptionally(new Exception("Response not successful"));
-                }
-            }
+    private static final String BASE_URL = BuildConfig.FREEC_API_BASE_URL;
+    private static final String TOKEN = BuildConfig.FREEC_APP_TOKEN;
 
-            @Override
-            public void onFailure(okhttp3.Call call, java.io.IOException e) {
-                future.completeExceptionally(e);
+    private static final OkHttpClient CLIENT = new OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .callTimeout(30, TimeUnit.SECONDS)
+            .build();
+
+    public static CompletableFuture<BuildingInfo> getClassroomCapacity(String buildingName) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return loadBuilding(buildingName);
+            } catch (Exception e) {
+                throw new RuntimeException(e.getMessage(), e);
             }
         });
-        return future;
+    }
+
+    private static BuildingInfo loadBuilding(String buildingName) throws Exception {
+        if (TOKEN == null || TOKEN.trim().isEmpty()) {
+            throw new IOException("教室数据服务未配置，请安装包含服务令牌的版本");
+        }
+        int buildingId = findBuildingId(buildingName);
+        String body = get("/api/v1/rooms?building_id=" + buildingId);
+        JSONArray data = new JSONArray(body);
+        List<ClassroomCapacity> rooms = new ArrayList<>();
+        String observedAt = "";
+        for (int i = 0; i < data.length(); i++) {
+            JSONObject room = data.optJSONObject(i);
+            if (room == null) continue;
+            String roomName = room.optString("name", "");
+            int capacity = room.optInt("capacity", 0);
+            int used = 0;
+            JSONObject occupancy = room.optJSONObject("occupancy");
+            if (occupancy != null) {
+                used = occupancy.optInt("count", 0);
+                String observed = occupancy.optString("observed_at", "");
+                if (!observed.isEmpty() && observedAt.isEmpty()) observedAt = observed;
+            }
+            if (!roomName.isEmpty()) {
+                rooms.add(new ClassroomCapacity(roomName, capacity, used));
+            }
+        }
+        String time = observedAt.replace("T", " ");
+        if (time.endsWith("Z")) time = time.substring(0, time.length() - 1);
+        return new BuildingInfo(buildingName, rooms, time, "");
+    }
+
+    private static int findBuildingId(String buildingName) throws Exception {
+        String body = get("/api/v1/buildings");
+        JSONArray data = new JSONArray(body);
+        for (int i = 0; i < data.length(); i++) {
+            JSONObject building = data.optJSONObject(i);
+            if (building == null) continue;
+            if (buildingName.equals(building.optString("name"))) {
+                return building.optInt("id", -1);
+            }
+        }
+        throw new IOException("教室服务中没有找到 " + buildingName);
+    }
+
+    private static String get(String path) throws Exception {
+        Request request = new Request.Builder()
+                .url(BASE_URL + path)
+                .header("Authorization", "Bearer " + TOKEN)
+                .build();
+        try (Response response = CLIENT.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("教室服务返回 HTTP " + response.code());
+            }
+            if (response.body() == null) {
+                throw new IOException("教室服务返回空数据");
+            }
+            return response.body().string();
+        }
     }
 
     public static class ClassroomCapacity {
@@ -74,7 +115,8 @@ public class ClassroomCapacityService {
         public String EffectiveDateStart;
         public String EffectiveDateEnd;
 
-        BuildingInfo(String BuildingName, List<ClassroomCapacity> ClassroomList, String EffectiveDateStart, String EffectiveDateEnd) {
+        BuildingInfo(String BuildingName, List<ClassroomCapacity> ClassroomList,
+                     String EffectiveDateStart, String EffectiveDateEnd) {
             this.BuildingName = BuildingName;
             this.ClassroomList = ClassroomList;
             this.EffectiveDateStart = EffectiveDateStart;

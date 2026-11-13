@@ -1,3 +1,11 @@
+import java.util.Properties
+
+val classroomLocal = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+val classroomToken = providers.environmentVariable("BJTUFREEC_APP_TOKEN").orNull
+    ?: classroomLocal.getProperty("BJTUFREEC_APP_TOKEN", "")
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -15,8 +23,10 @@ android {
         applicationId = "team.bjtuss.bjtuselfservice"
         minSdk = 28
         targetSdk = 36
-        versionCode = 41
-        versionName = "v1.26.1"
+        versionCode = 42
+        versionName = "v1.26.2"
+        buildConfigField("String", "FREEC_API_BASE_URL", "\"https://cdn13.koimune.com/\"")
+        buildConfigField("String", "FREEC_APP_TOKEN", "\"" + classroomToken.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -45,6 +55,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     splits {
         abi {
