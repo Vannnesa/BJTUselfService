@@ -83,8 +83,11 @@ public class ClassroomCapacityService {
     }
 
     private static String get(String path) throws Exception {
+        String baseUrl = BASE_URL.endsWith("/")
+                ? BASE_URL.substring(0, BASE_URL.length() - 1)
+                : BASE_URL;
         Request request = new Request.Builder()
-                .url(BASE_URL + path)
+                .url(baseUrl + path)
                 .header("Authorization", "Bearer " + TOKEN)
                 .build();
         try (Response response = CLIENT.newCall(request).execute()) {

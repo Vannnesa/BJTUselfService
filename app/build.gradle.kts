@@ -23,8 +23,8 @@ android {
         applicationId = "team.bjtuss.bjtuselfservice"
         minSdk = 28
         targetSdk = 36
-        versionCode = 42
-        versionName = "v1.26.2"
+        versionCode = 43
+        versionName = "v1.26.3"
         buildConfigField("String", "FREEC_API_BASE_URL", "\"https://cdn13.koimune.com/\"")
         buildConfigField("String", "FREEC_APP_TOKEN", "\"" + classroomToken.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
 
