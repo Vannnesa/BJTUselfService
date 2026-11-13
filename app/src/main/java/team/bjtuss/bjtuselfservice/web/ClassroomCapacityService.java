@@ -19,6 +19,7 @@ import team.bjtuss.bjtuselfservice.BuildConfig;
  * upstream app). The old yaya.csoci.com HTTP endpoint is no longer reachable.
  */
 public class ClassroomCapacityService {
+    public static boolean ok = false;
     private static final String BASE_URL = BuildConfig.FREEC_API_BASE_URL;
     private static final String TOKEN = BuildConfig.FREEC_APP_TOKEN;
 
